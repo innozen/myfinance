@@ -556,34 +556,155 @@
         <div class="item-change" id="usdkrw-change"><div class="skeleton change"></div></div>
         <div class="item-history" id="usdkrw-history"></div>
       </div>
-      <div class="item" id="jpyrw">
+      <div class="item" id="jpykrw">
         <div class="item-title">엔화 환율 (JPY/KRW)</div>
-        <div class="item-value" id="jpyrw-value"><div class="skeleton value"></div></div>
-        <div class="item-change" id="jpyrw-change"><div class="skeleton change"></div></div>
-        <div class="item-history" id="jpyrw-history"></div>
+        <div class="item-value" id="jpykrw-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="jpykrw-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="jpykrw-history"></div>
       </div>
     </div>
   </div>
   <script>
     const ALPHA_VANTAGE_KEY = '600ER7S7AEIFP1IX';
 
+    // 로컬 개발용 - 직접 Yahoo Finance API 호출
+    const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
     // 백엔드 API 엔드포인트 (Netlify Functions)
     const API_ENDPOINT = '/.netlify/functions/stocks';
 
-    // Yahoo Finance Symbol Map - 백엔드에서 처리하므로 참조용만
+    // Yahoo Finance Symbol Map
     const YAHOO_SYMBOLS = {
-      'KOSPI': '^KS11', // 코스피
-      'KOSDAQ': '^KQ11', // 코스닥
-      'SP500': '^GSPC', // S&P 500
-      'NASDAQ100': '^NDX', // 나스닥 100
-      'USD_KRW': 'USDKRW=X', // 달러/원 환율
-      'JPY_KRW': 'JPYKRW=X'  // 엔/원 환율
+      'kospi': '^KS11', // 코스피
+      'kosdaq': '^KQ11', // 코스닥
+      'sp500': '^GSPC', // S&P 500
+      'nasdaq100': '^NDX', // 나스닥 100
+      'usdkrw': 'USDKRW=X', // 달러/원 환율
+      'jpykrw': 'JPYKRW=X'  // 엔/원 환율
     };
+
+    // Yahoo Finance에서 직접 데이터 가져오기 (로컬 개발용)
+    async function fetchYahooData(symbol) {
+      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+      
+      // 여러 프록시 옵션 시도
+      const proxies = [
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
+      ];
+      
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl);
+          
+          if (!response.ok) {
+            continue;
+          }
+          
+          let parsed;
+          if (proxyUrl.includes('allorigins.win')) {
+            const data = await response.json();
+            parsed = JSON.parse(data.contents);
+          } else {
+            parsed = await response.json();
+          }
+          
+          const result = parsed.chart.result[0];
+          const close = result.indicators.quote[0].close;
+          const timestamps = result.timestamp;
+          
+          // 최근 2일 데이터로 현재값과 변화 계산
+          let prev = close[close.length - 2];
+          let curr = close[close.length - 1];
+          
+          // JPY/KRW의 경우 100을 곱해서 100엔 기준으로 변환
+          if (symbol === 'JPYKRW=X') {
+            prev = prev * 100;
+            curr = curr * 100;
+          }
+          
+          const change = curr - prev;
+          const percent = (change / prev) * 100;
+          
+          // 히스토리 데이터 생성 (최근 4일)
+          const history = [];
+          for (let i = Math.max(0, close.length - 4); i < close.length; i++) {
+            const date = new Date(timestamps[i] * 1000);
+            let value = close[i];
+            
+            if (symbol === 'JPYKRW=X') {
+              value = value * 100;
+            }
+            
+            const prevValue = i > 0 ? close[i-1] : close[i];
+            const dayChange = value - (symbol === 'JPYKRW=X' ? prevValue * 100 : prevValue);
+            
+            history.push({
+              date: `${date.getMonth() + 1}/${date.getDate()}`,
+              value: value.toLocaleString(undefined, {maximumFractionDigits: 2}),
+              change: dayChange.toFixed(2),
+              isUp: dayChange >= 0
+            });
+          }
+          
+          return {
+            main: {
+              symbol,
+              value: curr.toLocaleString(undefined, {maximumFractionDigits: 2}),
+              change: `${change >= 0 ? '+' : ''}${change.toFixed(2)}`,
+              percent: `${change >= 0 ? '+' : ''}${percent.toFixed(2)}%`,
+              up: change >= 0
+            },
+            history: history
+          };
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      return null;
+    }
+
+    // 로컬용 데이터 수집 함수
+    async function fetchAllStockDataLocal() {
+      try {
+        
+        const results = await Promise.allSettled([
+          fetchYahooData(YAHOO_SYMBOLS.kospi),
+          fetchYahooData(YAHOO_SYMBOLS.kosdaq),
+          fetchYahooData(YAHOO_SYMBOLS.sp500),
+          fetchYahooData(YAHOO_SYMBOLS.nasdaq100),
+          fetchYahooData(YAHOO_SYMBOLS.usdkrw),
+          fetchYahooData(YAHOO_SYMBOLS.jpykrw)
+        ]);
+        
+        const data = {};
+        const keys = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
+        
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled' && result.value) {
+            data[keys[index]] = result.value;
+          }
+        });
+        
+        return {
+          timestamp: new Date().toISOString(),
+          data: data,
+          cached: false
+        };
+      } catch (error) {
+        console.error('Error fetching local data:', error);
+        throw error;
+      }
+    }
 
     // 백엔드 API에서 모든 데이터 가져오기
     async function fetchAllStockData() {
+      if (IS_LOCAL) {
+        return await fetchAllStockDataLocal();
+      }
+      
       try {
-        console.log('Fetching data from backend API...');
         const response = await fetch(API_ENDPOINT);
         
         if (!response.ok) {
@@ -591,7 +712,6 @@
         }
         
         const result = await response.json();
-        console.log('Backend response:', result);
         
         return result;
       } catch (error) {
@@ -604,13 +724,17 @@
     function transformBackendData(backendData) {
       const sections = {};
       
-      Object.keys(backendData.data).forEach(key => {
-        const item = backendData.data[key];
-        sections[key] = {
-          data: item.main,
-          history: item.history
-        };
-      });
+      if (backendData && backendData.data) {
+        Object.keys(backendData.data).forEach(key => {
+          const item = backendData.data[key];
+          if (item && item.main) {
+            sections[key] = {
+              data: item.main,
+              history: item.history || []
+            };
+          }
+        });
+      }
       
       return sections;
     }
@@ -737,12 +861,7 @@
         const backendResponse = await fetchAllStockData();
         const sections = transformBackendData(backendResponse);
         
-        // 캐시 정보 표시
-        if (backendResponse.cached) {
-          console.log(`Using cached data (${backendResponse.cacheAge}s old)`);
-        } else {
-          console.log('Using fresh data from backend');
-        }
+        // 캐시된 데이터 사용
         
         // 각 섹션 렌더링
         Object.keys(sections).forEach(sectionKey => {
