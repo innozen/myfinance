@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주식 & 환율 대시보드 (로컬 테스트)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.8em;
+      font-weight: 600;
+    }
+    .item {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+    .item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .item-title {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    .item-value {
+      font-size: 1.5em;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 5px;
+    }
+    .item-change {
+      font-size: 1em;
+      font-weight: 500;
+    }
+    .up { color: #e74c3c; }
+    .down { color: #3498db; }
+    .loading {
+      text-align: center;
+      color: white;
+      font-size: 1.2em;
+      margin: 50px 0;
+    }
+    .error {
+      background: #ff6b6b;
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 10px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📈 주식 & 환율 대시보드</h1>
+      <div>로컬 테스트 버전</div>
+    </div>
+    
+    <div id="loading" class="loading">데이터를 불러오는 중...</div>
+    <div id="error" class="error" style="display:none;"></div>
+    
+    <div id="data-container" style="display:none;">
+      <div class="item" id="kospi">
+        <div class="item-title">코스피</div>
+        <div class="item-value" id="kospi-value">-</div>
+        <div class="item-change" id="kospi-change">-</div>
+      </div>
+      <div class="item" id="kosdaq">
+        <div class="item-title">코스닥</div>
+        <div class="item-value" id="kosdaq-value">-</div>
+        <div class="item-change" id="kosdaq-change">-</div>
+      </div>
+      <div class="item" id="sp500">
+        <div class="item-title">S&P 500</div>
+        <div class="item-value" id="sp500-value">-</div>
+        <div class="item-change" id="sp500-change">-</div>
+      </div>
+      <div class="item" id="nasdaq100">
+        <div class="item-title">나스닥 100</div>
+        <div class="item-value" id="nasdaq100-value">-</div>
+        <div class="item-change" id="nasdaq100-change">-</div>
+      </div>
+      <div class="item" id="usdkrw">
+        <div class="item-title">달러 환율 (USD/KRW)</div>
+        <div class="item-value" id="usdkrw-value">-</div>
+        <div class="item-change" id="usdkrw-change">-</div>
+      </div>
+      <div class="item" id="jpykrw">
+        <div class="item-title">엔화 환율 (JPY/KRW)</div>
+        <div class="item-value" id="jpykrw-value">-</div>
+        <div class="item-change" id="jpykrw-change">-</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Yahoo Finance 심볼 매핑
+    const SYMBOLS = {
+      'kospi': '^KS11',
+      'kosdaq': '^KQ11', 
+      'sp500': '^GSPC',
+      'nasdaq100': '^NDX',
+      'usdkrw': 'USDKRW=X',
+      'jpykrw': 'JPYKRW=X'
+    };
+
+    // Yahoo Finance에서 데이터 가져오기
+    async function fetchYahooData(symbol) {
+      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+      
+      try {
+        console.log(`Fetching data for ${symbol}...`);
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        const parsed = JSON.parse(data.contents);
+        const result = parsed.chart.result[0];
+        const close = result.indicators.quote[0].close;
+        
+        let prev = close[0];
+        let curr = close[1];
+        
+        // JPY/KRW의 경우 100을 곱해서 100엔 기준으로 변환
+        if (symbol === 'JPYKRW=X') {
+          prev = prev * 100;
+          curr = curr * 100;
+        }
+        
+        const change = curr - prev;
+        const percent = (change / prev) * 100;
+        
+        return {
+          symbol,
+          value: curr.toLocaleString(undefined, {maximumFractionDigits:2}),
+          change: `${change >= 0 ? '+' : ''}${change.toFixed(2)}`,
+          percent: `${change >= 0 ? '+' : ''}${percent.toFixed(2)}%`,
+          up: change >= 0
+        };
+      } catch (error) {
+        console.error(`Error fetching ${symbol}:`, error);
+        return null;
+      }
+    }
+
+    // 데이터 표시
+    function displayData(id, data) {
+      if (!data) {
+        document.getElementById(`${id}-value`).textContent = '데이터 없음';
+        document.getElementById(`${id}-change`).textContent = '-';
+        return;
+      }
+      
+      document.getElementById(`${id}-value`).textContent = data.value;
+      document.getElementById(`${id}-change`).innerHTML = 
+        `<span class="${data.up ? 'up' : 'down'}">${data.change} (${data.percent})</span>`;
+    }
+
+    // 모든 데이터 로드
+    async function loadAllData() {
+      try {
+        console.log('Starting data fetch...');
+        
+        // 병렬로 모든 데이터 가져오기
+        const results = await Promise.allSettled([
+          fetchYahooData(SYMBOLS.kospi),
+          fetchYahooData(SYMBOLS.kosdaq),
+          fetchYahooData(SYMBOLS.sp500),
+          fetchYahooData(SYMBOLS.nasdaq100),
+          fetchYahooData(SYMBOLS.usdkrw),
+          fetchYahooData(SYMBOLS.jpykrw)
+        ]);
+        
+        // 결과 표시
+        const keys = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
+        results.forEach((result, index) => {
+          const data = result.status === 'fulfilled' ? result.value : null;
+          displayData(keys[index], data);
+        });
+        
+        // 로딩 숨기고 데이터 표시
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('data-container').style.display = 'block';
+        
+        console.log('Data loading completed!');
+        
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = '데이터 로딩에 실패했습니다: ' + error.message;
+      }
+    }
+
+    // 페이지 로드 시 데이터 가져오기
+    loadAllData();
+  </script>
+</body>
+</html> 
