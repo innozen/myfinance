@@ -6,14 +6,20 @@ let dataCache = null;
 let lastUpdate = null;
 const CACHE_DURATION = 0; // 캐시 비활성화 (테스트용)
 
-// Yahoo Finance 심볼 매핑
+// Yahoo Finance 심볼 매핑 (대체 심볼 포함)
 const YAHOO_SYMBOLS = {
   'kospi': '^KS11',
   'kosdaq': '^KQ11', 
   'sp500': '^GSPC',
-  'nasdaq100': '^NDX',
+  'nasdaq100': '^NDX',  // 원래 심볼 유지
   'usdkrw': 'USDKRW=X',
-  'jpykrw': 'JPYKRW=X'
+  'jpykrw': 'JPYKRW=X'  // 원래 심볼 유지
+};
+
+// 대체 심볼 매핑 (실패 시 사용)
+const FALLBACK_SYMBOLS = {
+  'nasdaq100': '^IXIC',  // NASDAQ Composite
+  'jpykrw': 'JPY=X'      // 단순화된 JPY 심볼
 };
 
 // 여러 프록시를 시도하는 안정적인 fetch 함수
@@ -194,25 +200,65 @@ async function collectAllData() {
       
       console.log(`\n--- Processing ${symbol} (${symbolCode}) ---`);
       
-      // 메인 데이터 가져오기
-      try {
-        const mainData = await fetchYahooIndex(symbolCode);
-        results.push({ status: 'fulfilled', value: mainData });
-        console.log(`✅ Main data for ${symbol}: ${mainData ? 'Success' : 'Failed'}`);
-      } catch (error) {
-        results.push({ status: 'rejected', reason: error });
-        console.log(`❌ Main data for ${symbol}: ${error.message}`);
-      }
+             // 메인 데이터 가져오기 (대체 심볼 시도 포함)
+       let mainData = null;
+       let mainError = null;
+       
+       try {
+         mainData = await fetchYahooIndex(symbolCode);
+         console.log(`✅ Main data for ${symbol} (${symbolCode}): Success`);
+       } catch (error) {
+         mainError = error;
+         console.log(`❌ Main data for ${symbol} (${symbolCode}): ${error.message}`);
+         
+         // 대체 심볼 시도
+         const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
+         if (fallbackSymbol) {
+           try {
+             console.log(`🔄 Trying fallback symbol for ${symbol}: ${fallbackSymbol}`);
+             mainData = await fetchYahooIndex(fallbackSymbol);
+             console.log(`✅ Main data for ${symbol} (${fallbackSymbol}): Success`);
+           } catch (fallbackError) {
+             console.log(`❌ Fallback symbol for ${symbol} (${fallbackSymbol}): ${fallbackError.message}`);
+           }
+         }
+       }
+       
+       if (mainData) {
+         results.push({ status: 'fulfilled', value: mainData });
+       } else {
+         results.push({ status: 'rejected', reason: mainError });
+       }
       
-      // 히스토리 데이터 가져오기
-      try {
-        const historyData = await fetchHistory(symbolCode, symbol === 'jpykrw');
-        historyResults.push({ status: 'fulfilled', value: historyData });
-        console.log(`✅ History data for ${symbol}: ${historyData ? historyData.length : 0} days`);
-      } catch (error) {
-        historyResults.push({ status: 'rejected', reason: error });
-        console.log(`❌ History data for ${symbol}: ${error.message}`);
-      }
+             // 히스토리 데이터 가져오기 (대체 심볼 시도 포함)
+       let historyData = null;
+       let historyError = null;
+       
+       try {
+         historyData = await fetchHistory(symbolCode, symbol === 'jpykrw');
+         console.log(`✅ History data for ${symbol} (${symbolCode}): ${historyData ? historyData.length : 0} days`);
+       } catch (error) {
+         historyError = error;
+         console.log(`❌ History data for ${symbol} (${symbolCode}): ${error.message}`);
+         
+         // 대체 심볼 시도
+         const fallbackSymbol = FALLBACK_SYMBOLS[symbol];
+         if (fallbackSymbol) {
+           try {
+             console.log(`🔄 Trying fallback symbol history for ${symbol}: ${fallbackSymbol}`);
+             historyData = await fetchHistory(fallbackSymbol, symbol === 'jpykrw');
+             console.log(`✅ History data for ${symbol} (${fallbackSymbol}): ${historyData ? historyData.length : 0} days`);
+           } catch (fallbackError) {
+             console.log(`❌ Fallback symbol history for ${symbol} (${fallbackSymbol}): ${fallbackError.message}`);
+           }
+         }
+       }
+       
+       if (historyData) {
+         historyResults.push({ status: 'fulfilled', value: historyData });
+       } else {
+         historyResults.push({ status: 'rejected', reason: historyError });
+       }
       
       // 요청 간 딜레이 (프록시 과부하 방지)
       if (i < symbols.length - 1) {
