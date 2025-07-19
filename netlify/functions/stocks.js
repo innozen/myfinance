@@ -181,31 +181,47 @@ async function collectAllData() {
   try {
     console.log('Starting data collection...');
     
-    // 병렬로 모든 데이터 가져오기
-    const results = await Promise.allSettled([
-      fetchYahooIndex(YAHOO_SYMBOLS.kospi),
-      fetchYahooIndex(YAHOO_SYMBOLS.kosdaq),
-      fetchYahooIndex(YAHOO_SYMBOLS.sp500),
-      fetchYahooIndex(YAHOO_SYMBOLS.nasdaq100),
-      fetchYahooIndex(YAHOO_SYMBOLS.usdkrw),
-      fetchYahooIndex(YAHOO_SYMBOLS.jpykrw)
-    ]);
-    
-    // 히스토리 데이터도 병렬로 가져오기 (더 긴 타임아웃)
-    console.log('Starting history data collection...');
-    const historyPromises = [
-      fetchHistory(YAHOO_SYMBOLS.kospi),
-      fetchHistory(YAHOO_SYMBOLS.kosdaq),
-      fetchHistory(YAHOO_SYMBOLS.sp500),
-      fetchHistory(YAHOO_SYMBOLS.nasdaq100),
-      fetchHistory(YAHOO_SYMBOLS.usdkrw),
-      fetchHistory(YAHOO_SYMBOLS.jpykrw, true) // JPY는 특별 처리
-    ];
-    
-    const historyResults = await Promise.allSettled(historyPromises);
-    
+    // 순차적으로 데이터 가져오기 (안정성 향상)
     const symbols = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
-    const data = {};
+    const symbolCodes = [YAHOO_SYMBOLS.kospi, YAHOO_SYMBOLS.kosdaq, YAHOO_SYMBOLS.sp500, YAHOO_SYMBOLS.nasdaq100, YAHOO_SYMBOLS.usdkrw, YAHOO_SYMBOLS.jpykrw];
+    
+    const results = [];
+    const historyResults = [];
+    
+    for (let i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
+      const symbolCode = symbolCodes[i];
+      
+      console.log(`\n--- Processing ${symbol} (${symbolCode}) ---`);
+      
+      // 메인 데이터 가져오기
+      try {
+        const mainData = await fetchYahooIndex(symbolCode);
+        results.push({ status: 'fulfilled', value: mainData });
+        console.log(`✅ Main data for ${symbol}: ${mainData ? 'Success' : 'Failed'}`);
+      } catch (error) {
+        results.push({ status: 'rejected', reason: error });
+        console.log(`❌ Main data for ${symbol}: ${error.message}`);
+      }
+      
+      // 히스토리 데이터 가져오기
+      try {
+        const historyData = await fetchHistory(symbolCode, symbol === 'jpykrw');
+        historyResults.push({ status: 'fulfilled', value: historyData });
+        console.log(`✅ History data for ${symbol}: ${historyData ? historyData.length : 0} days`);
+      } catch (error) {
+        historyResults.push({ status: 'rejected', reason: error });
+        console.log(`❌ History data for ${symbol}: ${error.message}`);
+      }
+      
+      // 요청 간 딜레이 (프록시 과부하 방지)
+      if (i < symbols.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
+      }
+         }
+     
+     // const symbols는 위에서 이미 정의됨
+     const data = {};
     
     results.forEach((result, index) => {
       const symbol = symbols[index];
