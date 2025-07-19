@@ -54,14 +54,32 @@ async function fetchWithProxies(targetUrl, symbol) {
 // Yahoo Finance에서 단일 지수 데이터 가져오기
 async function fetchYahooIndex(symbol) {
   try {
+    console.log(`🔄 Starting fetch for ${symbol}`);
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
     const parsed = await fetchWithProxies(targetUrl, symbol);
     
+    if (!parsed || !parsed.chart || !parsed.chart.result || !parsed.chart.result[0]) {
+      throw new Error(`Invalid response structure for ${symbol}`);
+    }
+    
     const result = parsed.chart.result[0];
+    
+    if (!result.indicators || !result.indicators.quote || !result.indicators.quote[0] || !result.indicators.quote[0].close) {
+      throw new Error(`Missing price data for ${symbol}`);
+    }
+    
     const close = result.indicators.quote[0].close;
     
-    let prev = close[0];
-    let curr = close[1];
+    if (!close || close.length < 2) {
+      throw new Error(`Insufficient price data for ${symbol}: ${close ? close.length : 0} points`);
+    }
+    
+    let prev = close[close.length - 2];
+    let curr = close[close.length - 1];
+    
+    if (prev === null || prev === undefined || curr === null || curr === undefined) {
+      throw new Error(`Invalid price values for ${symbol}: prev=${prev}, curr=${curr}`);
+    }
     
     // JPY/KRW의 경우 100을 곱해서 100엔 기준으로 변환
     if (symbol === 'JPYKRW=X') {
@@ -191,6 +209,7 @@ async function collectAllData() {
     
     results.forEach((result, index) => {
       const symbol = symbols[index];
+      const symbolCode = Object.values(YAHOO_SYMBOLS)[index];
       const main = result.status === 'fulfilled' ? result.value : null;
       const history = historyResults[index].status === 'fulfilled' ? historyResults[index].value : [];
       
@@ -199,9 +218,12 @@ async function collectAllData() {
           main: main,
           history: history
         };
-        console.log(`✅ ${symbol}: Success`);
+        console.log(`✅ ${symbol} (${symbolCode}): Success - Value: ${main.value}, History: ${history.length} days`);
       } else {
-        console.log(`❌ ${symbol}: Failed`);
+        console.log(`❌ ${symbol} (${symbolCode}): FAILED`);
+        if (result.status === 'rejected') {
+          console.log(`   Error: ${result.reason}`);
+        }
       }
     });
     
