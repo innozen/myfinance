@@ -22,6 +22,13 @@ const FALLBACK_SYMBOLS = {
   'jpykrw': 'JPY=X'      // 단순화된 JPY 심볼
 };
 
+// 엔화 환율 대체 심볼들 (순서대로 시도)
+const JPY_FALLBACK_SYMBOLS = [
+  'JPY=X',
+  'JPY=X',
+  'JPY=X'
+];
+
 // 여러 프록시를 시도하는 안정적인 fetch 함수
 async function fetchWithProxies(targetUrl, symbol) {
   const proxies = [
@@ -220,6 +227,17 @@ async function collectAllData() {
              console.log(`✅ Main data for ${symbol} (${fallbackSymbol}): Success`);
            } catch (fallbackError) {
              console.log(`❌ Fallback symbol for ${symbol} (${fallbackSymbol}): ${fallbackError.message}`);
+             
+             // 엔화 환율의 경우 추가 시도
+             if (symbol === 'jpykrw') {
+               try {
+                 console.log(`🔄 Trying JPY alternative: JPY=X`);
+                 mainData = await fetchYahooIndex('JPY=X');
+                 console.log(`✅ Main data for ${symbol} (JPY=X): Success`);
+               } catch (jpyError) {
+                 console.log(`❌ JPY alternative failed: ${jpyError.message}`);
+               }
+             }
            }
          }
        }
@@ -250,6 +268,17 @@ async function collectAllData() {
              console.log(`✅ History data for ${symbol} (${fallbackSymbol}): ${historyData ? historyData.length : 0} days`);
            } catch (fallbackError) {
              console.log(`❌ Fallback symbol history for ${symbol} (${fallbackSymbol}): ${fallbackError.message}`);
+             
+             // 엔화 환율의 경우 추가 시도
+             if (symbol === 'jpykrw') {
+               try {
+                 console.log(`🔄 Trying JPY history alternative: JPY=X`);
+                 historyData = await fetchHistory('JPY=X', true);
+                 console.log(`✅ History data for ${symbol} (JPY=X): ${historyData ? historyData.length : 0} days`);
+               } catch (jpyError) {
+                 console.log(`❌ JPY history alternative failed: ${jpyError.message}`);
+               }
+             }
            }
          }
        }
