@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주요 지수 & 환율 등락률</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f7f7f7;
+      color: #222;
+      padding-top: 80px;
+    }
+    
+    /* 상단 헤더 */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+      border-bottom: 1px solid #e9ecef;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      z-index: 1000;
+      padding: 16px;
+    }
+    
+    .header-content {
+      max-width: 480px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header-info {
+      flex: 1;
+    }
+    
+    .header-title {
+      font-size: 1.2em;
+      font-weight: 700;
+      color: #222;
+      margin-bottom: 2px;
+    }
+    
+    .header-update {
+      font-size: 0.8em;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .update-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #28a745;
+      animation: pulse 2s infinite;
+    }
+    
+    .update-dot.loading {
+      background: #ffc107;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    .refresh-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.9em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+    }
+    
+    .refresh-btn:hover {
+      background: #0056b3;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+    }
+    
+    .refresh-btn:active {
+      transform: translateY(0);
+    }
+    
+    .refresh-btn.loading {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+    
+    .refresh-icon {
+      font-size: 1em;
+      transition: transform 0.3s ease;
+    }
+    
+    .refresh-btn.loading .refresh-icon {
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .item {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      margin-bottom: 16px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s ease forwards;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* 상승/하락 배경 그라데이션 */
+    .item.trend-up {
+      background: linear-gradient(135deg, #fff 0%, #fff8f8 100%);
+      border-left: 4px solid #d32f2f;
+    }
+    .item.trend-down {
+      background: linear-gradient(135deg, #fff 0%, #f8f9ff 100%);
+      border-left: 4px solid #1976d2;
+    }
+    .item.trend-neutral {
+      background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
+      border-left: 4px solid #666;
+    }
+    
+    /* 호버 효과 */
+    .item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    
+    /* 페이드인 애니메이션 */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    /* 애니메이션 지연 */
+    .item:nth-child(1) { animation-delay: 0.1s; }
+    .item:nth-child(2) { animation-delay: 0.2s; }
+    .item:nth-child(3) { animation-delay: 0.3s; }
+    .item:nth-child(4) { animation-delay: 0.4s; }
+    .item:nth-child(5) { animation-delay: 0.5s; }
+    .item:nth-child(6) { animation-delay: 0.6s; }
+    
+    .item-title {
+      font-size: 1.1em;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .item-value {
+      font-size: 1.3em;
+      font-weight: 700;
+      margin-bottom: 4px;
+      transition: all 0.3s ease;
+    }
+    
+    /* 숫자 변경 애니메이션 */
+    .item-value.updating {
+      animation: pulse 0.6s ease;
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    
+    .item-change {
+      font-size: 1em;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+    
+    /* 로딩 스켈레톤 */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+      border-radius: 4px;
+      height: 20px;
+      margin-bottom: 8px;
+    }
+    
+    .skeleton.title {
+      width: 60%;
+      height: 16px;
+    }
+    
+    .skeleton.value {
+      width: 80%;
+      height: 24px;
+    }
+    
+    .skeleton.change {
+      width: 70%;
+      height: 18px;
+    }
+    
+    @keyframes loading {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    
+    .item-history {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+    .history-cards {
+      display: flex;
+      gap: 8px;
+      padding: 12px 0;
+      margin-top: 8px;
+      width: 100%;
+    }
+    .history-card {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 14px 8px;
+      flex: 1 1 25%;
+      width: 25%;
+      text-align: center;
+      border: 1px solid #e9ecef;
+      min-width: 85px;
+      max-width: 25%;
+      box-sizing: border-box;
+      transition: all 0.3s ease;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: fadeInUp 0.4s ease forwards;
+    }
+    
+    /* 히스토리 카드 애니메이션 지연 */
+    .history-card:nth-child(1) { animation-delay: 0.1s; }
+    .history-card:nth-child(2) { animation-delay: 0.2s; }
+    .history-card:nth-child(3) { animation-delay: 0.3s; }
+    .history-card:nth-child(4) { animation-delay: 0.4s; }
+    
+    /* 히스토리 카드 호버 효과 */
+    .history-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* 상승/하락 카드 배경 */
+    .history-card.card-up {
+      background: linear-gradient(135deg, #fff5f5 0%, #ffebee 100%);
+      border-color: #ffcdd2;
+    }
+    .history-card.card-down {
+      background: linear-gradient(135deg, #f3f8ff 0%, #e8f4fd 100%);
+      border-color: #bbdefb;
+    }
+    
+    .history-date {
+      font-size: 0.9em;
+      color: #666;
+      margin-bottom: 6px;
+      white-space: nowrap;
+    }
+    .history-value {
+      font-size: 1em;
+      font-weight: 600;
+      margin-bottom: 6px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    
+    /* 긴 숫자를 위한 작은 폰트 클래스 - 제거하고 균등하게 */
+    .history-value.small-text {
+      font-size: 1em;
+    }
+    .history-value.very-small-text {
+      font-size: 1em;
+    }
+    
+    .history-change {
+      font-size: 0.85em;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      white-space: nowrap;
+    }
+    
+    .arrow-up {
+      color: #d32f2f;
+      animation: bounce 0.6s ease;
+    }
+    .arrow-down {
+      color: #1976d2;
+      animation: bounce 0.6s ease;
+    }
+    .arrow-flat {
+      color: #666;
+    }
+    
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-3px); }
+      60% { transform: translateY(-2px); }
+    }
+    
+    .history-day {
+      display: inline-block;
+      margin-right: 12px;
+      margin-bottom: 4px;
+    }
+    .up { 
+      color: #d32f2f;
+      animation: colorPulse 0.8s ease;
+    }
+    .down { 
+      color: #1976d2;
+      animation: colorPulse 0.8s ease;
+    }
+    
+    @keyframes colorPulse {
+      0% { opacity: 0.7; }
+      50% { opacity: 1; }
+      100% { opacity: 0.9; }
+    }
+    
+    .loading {
+      text-align: center;
+      margin-top: 40px;
+      color: #888;
+      animation: pulse 1.5s infinite;
+    }
+    
+    /* 모바일 최적화 */
+    @media (max-width: 480px) {
+      body {
+        padding-top: 70px;
+      }
+      
+      .header {
+        padding: 12px 16px;
+      }
+      
+      .header-title {
+        font-size: 1.1em;
+      }
+      
+      .header-update {
+        font-size: 0.75em;
+      }
+      
+      .refresh-btn {
+        padding: 8px 12px;
+        font-size: 0.85em;
+      }
+      
+      .container {
+        padding: 12px;
+      }
+      .history-cards {
+        gap: 6px;
+      }
+      .history-card {
+        padding: 12px 6px;
+        flex: 1 1 25%;
+        width: 25%;
+        max-width: 25%;
+        min-width: 80px;
+      }
+      .history-date {
+        font-size: 0.8em;
+      }
+      .history-value {
+        font-size: 0.9em;
+      }
+      .history-value.small-text {
+        font-size: 0.9em;
+      }
+      .history-value.very-small-text {
+        font-size: 0.9em;
+      }
+      .history-change {
+        font-size: 0.75em;
+      }
+    }
+    
+    /* 아주 작은 화면 (아이폰 SE 등) */
+    @media (max-width: 375px) {
+      body {
+        padding-top: 65px;
+      }
+      
+      .header {
+        padding: 10px 12px;
+      }
+      
+      .header-title {
+        font-size: 1em;
+      }
+      
+      .header-update {
+        font-size: 0.7em;
+      }
+      
+      .refresh-btn {
+        padding: 6px 10px;
+        font-size: 0.8em;
+        gap: 4px;
+      }
+      
+      .refresh-icon {
+        font-size: 0.9em;
+      }
+      
+      .container {
+        padding: 10px;
+      }
+      .history-cards {
+        gap: 4px;
+      }
+      .history-card {
+        padding: 10px 4px;
+        flex: 1 1 25%;
+        width: 25%;
+        max-width: 25%;
+        min-width: 75px;
+      }
+      .history-date {
+        font-size: 0.75em;
+      }
+      .history-value {
+        font-size: 0.85em;
+      }
+      .history-value.small-text {
+        font-size: 0.85em;
+      }
+      .history-value.very-small-text {
+        font-size: 0.85em;
+      }
+      .history-change {
+        font-size: 0.7em;
+      }
+    }
+    
+    /* 큰 모바일 화면 */
+    @media (min-width: 481px) and (max-width: 768px) {
+      .history-card {
+        padding: 16px 10px;
+        flex: 1 1 25%;
+        width: 25%;
+        max-width: 25%;
+        min-width: 90px;
+      }
+      .history-date {
+        font-size: 0.95em;
+      }
+      .history-value {
+        font-size: 1.05em;
+      }
+      .history-value.small-text {
+        font-size: 1.05em;
+      }
+      .history-value.very-small-text {
+        font-size: 1.05em;
+      }
+      .history-change {
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="header-info">
+        <div class="header-title">주식 & 환율 대시보드</div>
+        <div class="header-update">
+          <div class="update-dot" id="update-dot"></div>
+          <span id="last-update">업데이트 중...</span>
+        </div>
+      </div>
+      <button class="refresh-btn" id="refresh-btn" onclick="handleRefresh()">
+        <span class="refresh-icon" id="refresh-icon">🔄</span>
+        <span id="refresh-text">새로고침</span>
+      </button>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div id="loading" class="loading">데이터를 불러오는 중...</div>
+    <div id="indices" style="display:none">
+      <div class="item" id="kospi">
+        <div class="item-title">코스피</div>
+        <div class="item-value" id="kospi-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="kospi-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="kospi-history"></div>
+      </div>
+      <div class="item" id="kosdaq">
+        <div class="item-title">코스닥</div>
+        <div class="item-value" id="kosdaq-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="kosdaq-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="kosdaq-history"></div>
+      </div>
+      <div class="item" id="sp500">
+        <div class="item-title">S&P 500</div>
+        <div class="item-value" id="sp500-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="sp500-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="sp500-history"></div>
+      </div>
+      <div class="item" id="nasdaq100">
+        <div class="item-title">나스닥 100</div>
+        <div class="item-value" id="nasdaq100-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="nasdaq100-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="nasdaq100-history"></div>
+      </div>
+      <div class="item" id="usdkrw">
+        <div class="item-title">달러 환율 (USD/KRW)</div>
+        <div class="item-value" id="usdkrw-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="usdkrw-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="usdkrw-history"></div>
+      </div>
+      <div class="item" id="jpyrw">
+        <div class="item-title">엔화 환율 (JPY/KRW)</div>
+        <div class="item-value" id="jpyrw-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="jpyrw-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="jpyrw-history"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const ALPHA_VANTAGE_KEY = '600ER7S7AEIFP1IX';
+
+    // 백엔드 API 엔드포인트 (Netlify Functions)
+    const API_ENDPOINT = '/.netlify/functions/stocks';
+
+    // Yahoo Finance Symbol Map - 백엔드에서 처리하므로 참조용만
+    const YAHOO_SYMBOLS = {
+      'KOSPI': '^KS11', // 코스피
+      'KOSDAQ': '^KQ11', // 코스닥
+      'SP500': '^GSPC', // S&P 500
+      'NASDAQ100': '^NDX', // 나스닥 100
+      'USD_KRW': 'USDKRW=X', // 달러/원 환율
+      'JPY_KRW': 'JPYKRW=X'  // 엔/원 환율
+    };
+
+    // 백엔드 API에서 모든 데이터 가져오기
+    async function fetchAllStockData() {
+      try {
+        console.log('Fetching data from backend API...');
+        const response = await fetch(API_ENDPOINT);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Backend response:', result);
+        
+        return result;
+      } catch (error) {
+        console.error('Error fetching from backend:', error);
+        throw error;
+      }
+    }
+
+    // 백엔드 데이터를 프론트엔드 형식으로 변환
+    function transformBackendData(backendData) {
+      const sections = {};
+      
+      Object.keys(backendData.data).forEach(key => {
+        const item = backendData.data[key];
+        sections[key] = {
+          data: item.main,
+          history: item.history
+        };
+      });
+      
+      return sections;
+    }
+
+    // 기존 함수들 제거 (백엔드로 이동)
+    /*
+    async function fetchYahooIndex(symbol) { ... }
+    async function fetchHistory(symbol, isJPY = false) { ... }
+    */
+
+    function renderHistoryCards(historyData) {
+      if (!historyData || historyData.length === 0) return '';
+      
+      const historyHtml = historyData.map((day, index) => {
+        let arrow = '';
+        let arrowClass = '';
+        let cardClass = '';
+        if (day.change > 0) {
+          arrow = '▲';
+          arrowClass = 'arrow-up';
+          cardClass = 'card-up';
+        } else if (day.change < 0) {
+          arrow = '▼';
+          arrowClass = 'arrow-down';
+          cardClass = 'card-down';
+        } else {
+          arrow = '─';
+          arrowClass = 'arrow-flat';
+        }
+        
+        // 모든 카드의 폰트 크기를 동일하게 유지
+        return `<div class="history-card ${cardClass}" style="animation-delay: ${0.1 + index * 0.1}s">
+          <div class="history-date">${day.date}</div>
+          <div class="history-value">${day.value}</div>
+          <div class="history-change ${day.isUp ? 'up' : 'down'}">
+            <span class="${arrowClass}">${arrow}</span>
+            <span>${day.isUp ? '+' : ''}${day.change}</span>
+          </div>
+        </div>`;
+      }).join('');
+      
+      return `<div style="font-size: 0.9em; margin-bottom: 4px; color: #888;">최근 4일</div><div class="history-cards">${historyHtml}</div>`;
+    }
+
+    // 각 섹션을 독립적으로 렌더링하는 함수들
+    function renderSection(sectionId, data, history) {
+      const itemEl = document.getElementById(sectionId);
+      const valueEl = document.getElementById(`${sectionId}-value`);
+      const changeEl = document.getElementById(`${sectionId}-change`);
+      const historyEl = document.getElementById(`${sectionId}-history`);
+      
+      if (data) {
+        // 트렌드 클래스 적용
+        itemEl.classList.remove('trend-up', 'trend-down', 'trend-neutral');
+        if (data.up) {
+          itemEl.classList.add('trend-up');
+        } else if (data.change.includes('-')) {
+          itemEl.classList.add('trend-down');
+        } else {
+          itemEl.classList.add('trend-neutral');
+        }
+        
+        // 숫자 변경 애니메이션
+        valueEl.classList.add('updating');
+        setTimeout(() => valueEl.classList.remove('updating'), 600);
+        
+        valueEl.textContent = data.value;
+        changeEl.innerHTML = `<span class="${data.up ? 'up' : 'down'}">${data.change} (${data.percent})</span>`;
+        
+        if (history) {
+          historyEl.innerHTML = renderHistoryCards(history);
+        }
+      } else {
+        itemEl.classList.add('trend-neutral');
+        valueEl.textContent = '-';
+        changeEl.textContent = '데이터 없음';
+      }
+    }
+
+    // 현재 시간을 포맷팅하는 함수
+    function formatTime(date) {
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const seconds = date.getSeconds().toString().padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    }
+
+    // 헤더 업데이트 함수
+    function updateHeader(isLoading = false) {
+      const updateDot = document.getElementById('update-dot');
+      const lastUpdate = document.getElementById('last-update');
+      const refreshBtn = document.getElementById('refresh-btn');
+      const refreshIcon = document.getElementById('refresh-icon');
+      const refreshText = document.getElementById('refresh-text');
+      
+      if (isLoading) {
+        updateDot.classList.add('loading');
+        lastUpdate.textContent = '업데이트 중...';
+        refreshBtn.classList.add('loading');
+        refreshBtn.disabled = true;
+        refreshText.textContent = '로딩중';
+      } else {
+        updateDot.classList.remove('loading');
+        const now = new Date();
+        lastUpdate.textContent = `마지막 업데이트: ${formatTime(now)}`;
+        refreshBtn.classList.remove('loading');
+        refreshBtn.disabled = false;
+        refreshText.textContent = '새로고침';
+      }
+    }
+
+    // 새로고침 버튼 핸들러
+    function handleRefresh() {
+      loadData();
+    }
+
+    async function loadData() {
+      updateHeader(true);
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('indices').style.display = 'block';
+
+      try {
+        // 백엔드 API에서 모든 데이터 가져오기
+        const backendResponse = await fetchAllStockData();
+        const sections = transformBackendData(backendResponse);
+        
+        // 캐시 정보 표시
+        if (backendResponse.cached) {
+          console.log(`Using cached data (${backendResponse.cacheAge}s old)`);
+        } else {
+          console.log('Using fresh data from backend');
+        }
+        
+        // 각 섹션 렌더링
+        Object.keys(sections).forEach(sectionKey => {
+          const section = sections[sectionKey];
+          if (section.data && section.history) {
+            renderSection(sectionKey, section.data, section.history);
+          }
+        });
+
+        document.getElementById('loading').style.display = 'none';
+        updateHeader(false);
+        
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        document.getElementById('loading').textContent = '데이터 로딩에 실패했습니다. 새로고침을 시도해주세요.';
+        updateHeader(false);
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
+

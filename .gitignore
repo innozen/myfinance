@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Build outputs
+dist/
+build/
+.netlify/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python files (프로젝트와 무관)
+*.py
+*.pyc
+__pycache__/
+.venv/
+
+# Other project files (주식 프로젝트와 무관)
+app/
+main/
+add_items.py
+import tkinter as tk.py
+import random.ini
+Untitled-1.py 
