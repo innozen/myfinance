@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 // 메모리 캐시 (서버리스 환경에서는 제한적)
 let dataCache = null;
 let lastUpdate = null;
-const CACHE_DURATION = 2 * 60 * 1000; // 2분으로 단축
+const CACHE_DURATION = 0; // 캐시 비활성화 (테스트용)
 
 // Yahoo Finance 심볼 매핑
 const YAHOO_SYMBOLS = {
