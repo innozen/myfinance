@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 // 메모리 캐시 (서버리스 환경에서는 제한적)
 let dataCache = null;
 let lastUpdate = null;
-const CACHE_DURATION = 0; // 캐시 비활성화 (테스트용)
+const CACHE_DURATION = 3 * 60 * 1000; // 3분 캐시 (안정성 향상)
 
 // Yahoo Finance 심볼 매핑 (대체 심볼 포함)
 const YAHOO_SYMBOLS = {
@@ -29,39 +29,50 @@ const JPY_FALLBACK_SYMBOLS = [
   'JPY=X'
 ];
 
-// 여러 프록시를 시도하는 안정적인 fetch 함수
-async function fetchWithProxies(targetUrl, symbol) {
-  const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
-  ];
+  // 여러 프록시를 시도하는 안정적인 fetch 함수
+  async function fetchWithProxies(targetUrl, symbol) {
+    const proxies = [
+      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+      `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+      `https://cors-anywhere.herokuapp.com/${targetUrl}`
+    ];
   
-  for (const proxyUrl of proxies) {
-    try {
-      console.log(`Trying proxy for ${symbol}: ${proxyUrl.split('?')[0]}`);
-      const res = await fetch(proxyUrl, { timeout: 20000 });
-      
-      if (!res.ok) {
-        console.log(`Proxy failed with status ${res.status}`);
+  // 최대 3번 재시도
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    for (const proxyUrl of proxies) {
+      try {
+        console.log(`Trying proxy for ${symbol} (attempt ${attempt}): ${proxyUrl.split('?')[0]}`);
+        const res = await fetch(proxyUrl, { timeout: 25000 });
+        
+        if (!res.ok) {
+          console.log(`Proxy failed with status ${res.status}`);
+          continue;
+        }
+        
+        let parsed;
+        if (proxyUrl.includes('allorigins.win')) {
+          const data = await res.json();
+          parsed = JSON.parse(data.contents);
+        } else {
+          parsed = await res.json();
+        }
+        
+        console.log(`✅ Success with proxy: ${proxyUrl.split('?')[0]}`);
+        return parsed;
+      } catch (e) {
+        console.log(`Proxy error for ${symbol}: ${e.message}`);
         continue;
       }
-      
-      let parsed;
-      if (proxyUrl.includes('allorigins.win')) {
-        const data = await res.json();
-        parsed = JSON.parse(data.contents);
-      } else {
-        parsed = await res.json();
-      }
-      
-      return parsed;
-    } catch (e) {
-      console.log(`Proxy error for ${symbol}: ${e.message}`);
-      continue;
+    }
+    
+    // 모든 프록시 실패 시 잠시 대기 후 재시도
+    if (attempt < 3) {
+      console.log(`All proxies failed for ${symbol}, retrying in 2 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
   
-  throw new Error(`All proxies failed for ${symbol}`);
+  throw new Error(`All proxies failed for ${symbol} after 3 attempts`);
 }
 
 // Yahoo Finance에서 단일 지수 데이터 가져오기
@@ -300,10 +311,10 @@ async function collectAllData() {
          historyResults.push({ status: 'rejected', reason: historyError });
        }
       
-      // 요청 간 딜레이 (프록시 과부하 방지)
-      if (i < symbols.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
-      }
+             // 요청 간 딜레이 (프록시 과부하 방지)
+       if (i < symbols.length - 1) {
+         await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+       }
          }
      
      // const symbols는 위에서 이미 정의됨
