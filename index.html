@@ -696,27 +696,44 @@
       return null;
     }
 
-    // 로컬용 데이터 수집 함수
+    // 로컬용 데이터 수집 함수 (최적화된 순차 로딩)
     async function fetchAllStockDataLocal() {
       try {
-        
-        const results = await Promise.allSettled([
-          fetchYahooData(YAHOO_SYMBOLS.kospi),
-          fetchYahooData(YAHOO_SYMBOLS.kosdaq),
-          fetchYahooData(YAHOO_SYMBOLS.sp500),
-          fetchYahooData(YAHOO_SYMBOLS.nasdaq100),
-          fetchYahooData(YAHOO_SYMBOLS.usdkrw),
-          fetchYahooData(YAHOO_SYMBOLS.jpykrw)
-        ]);
-        
         const data = {};
-        const keys = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
+        const symbols = [
+          { key: 'kospi', symbol: YAHOO_SYMBOLS.kospi, name: 'KOSPI' },
+          { key: 'kosdaq', symbol: YAHOO_SYMBOLS.kosdaq, name: 'KOSDAQ' },
+          { key: 'sp500', symbol: YAHOO_SYMBOLS.sp500, name: 'S&P 500' },
+          { key: 'nasdaq100', symbol: YAHOO_SYMBOLS.nasdaq100, name: 'NASDAQ 100' },
+          { key: 'usdkrw', symbol: YAHOO_SYMBOLS.usdkrw, name: 'USD/KRW' },
+          { key: 'jpykrw', symbol: YAHOO_SYMBOLS.jpykrw, name: 'JPY/KRW' }
+        ];
         
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled' && result.value) {
-            data[keys[index]] = result.value;
+        // 순차적으로 데이터 로딩 (점진적 표시)
+        for (let i = 0; i < symbols.length; i++) {
+          const { key, symbol, name } = symbols[i];
+          
+          // 진행률 표시
+          updateLoadingProgress(i + 1, symbols.length, name);
+          
+          // 개별 데이터 로딩
+          const result = await fetchYahooData(symbol);
+          
+          if (result) {
+            data[key] = result;
+            // 즉시 화면에 표시
+            renderSection(key, result.main, result.history);
+            console.log(`✅ ${name} 로딩 완료`);
+          } else {
+            console.log(`❌ ${name} 로딩 실패`);
+            renderSection(key, null, null);
           }
-        });
+          
+          // 프록시 서버 부하 방지를 위한 짧은 대기
+          if (i < symbols.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
         
         return {
           timestamp: new Date().toISOString(),
@@ -854,6 +871,13 @@
       return `${hours}:${minutes}:${seconds}`;
     }
 
+    // 로딩 진행률 업데이트 함수
+    function updateLoadingProgress(current, total, currentName) {
+      const lastUpdate = document.getElementById('last-update');
+      const progress = Math.round((current / total) * 100);
+      lastUpdate.textContent = `로딩 중... ${current}/${total} (${progress}%) - ${currentName}`;
+    }
+
     // 헤더 업데이트 함수
     function updateHeader(isLoading = false) {
       const updateDot = document.getElementById('update-dot');
@@ -883,20 +907,74 @@
       loadData(true); // 강제 새로고침
     }
 
+    // 로컬 스토리지에서 캐시된 데이터 가져오기
+    function getCachedData() {
+      try {
+        const cached = localStorage.getItem('financeData');
+        if (cached) {
+          const data = JSON.parse(cached);
+          const cacheAge = Date.now() - new Date(data.timestamp).getTime();
+          // 5분 이내 캐시만 사용
+          if (cacheAge < 5 * 60 * 1000) {
+            console.log('📦 Using cached data');
+            return data;
+          }
+        }
+      } catch (error) {
+        console.log('Cache error:', error);
+      }
+      return null;
+    }
+
+    // 데이터를 로컬 스토리지에 캐시하기
+    function cacheData(data) {
+      try {
+        localStorage.setItem('financeData', JSON.stringify(data));
+        console.log('💾 Data cached');
+      } catch (error) {
+        console.log('Cache save error:', error);
+      }
+    }
+
     async function loadData(forceRefresh = false) {
       updateHeader(true);
       document.getElementById('loading').style.display = 'block';
       document.getElementById('indices').style.display = 'block';
 
       try {
-        // 백엔드 API에서 모든 데이터 가져오기
+        // 강제 새로고침이 아니면 캐시 먼저 확인
+        if (!forceRefresh) {
+          const cachedData = getCachedData();
+          if (cachedData) {
+            console.log('🚀 Loading from cache...');
+            const sections = USE_FRONTEND_FETCH ? cachedData.data : transformBackendData(cachedData);
+            
+            // 캐시된 데이터로 즉시 표시
+            Object.keys(sections).forEach(key => {
+              const section = sections[key];
+              if (section && section.data) {
+                renderSection(key, section.data, section.history);
+              }
+            });
+            
+            document.getElementById('loading').style.display = 'none';
+            updateHeader(false);
+            
+            // 백그라운드에서 최신 데이터 업데이트
+            setTimeout(() => {
+              loadData(true);
+            }, 1000);
+            return;
+          }
+        }
+        
+        // 새로운 데이터 로딩
+        console.log('🔄 Loading fresh data...');
         const backendResponse = await fetchAllStockData(forceRefresh);
         console.log('Raw backend response:', backendResponse);
         
-        const sections = transformBackendData(backendResponse);
+        const sections = USE_FRONTEND_FETCH ? backendResponse.data : transformBackendData(backendResponse);
         console.log('Transformed sections:', sections);
-        
-        // 캐시된 데이터 사용
         
         // 각 섹션 렌더링
         console.log('Available sections:', Object.keys(sections));
@@ -913,6 +991,11 @@
             renderSection(sectionKey, null, []);
           }
         });
+
+        // 성공한 데이터 캐시
+        if (backendResponse && backendResponse.data) {
+          cacheData(backendResponse);
+        }
 
         document.getElementById('loading').style.display = 'none';
         updateHeader(false);
