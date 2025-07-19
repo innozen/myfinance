@@ -859,15 +859,26 @@
       try {
         // 백엔드 API에서 모든 데이터 가져오기
         const backendResponse = await fetchAllStockData();
+        console.log('Raw backend response:', backendResponse);
+        
         const sections = transformBackendData(backendResponse);
+        console.log('Transformed sections:', sections);
         
         // 캐시된 데이터 사용
         
         // 각 섹션 렌더링
-        Object.keys(sections).forEach(sectionKey => {
-          const section = sections[sectionKey];
-          if (section.data && section.history) {
-            renderSection(sectionKey, section.data, section.history);
+        console.log('Available sections:', Object.keys(sections));
+        
+        // 모든 예상 섹션 확인
+        const expectedSections = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
+        expectedSections.forEach(sectionKey => {
+          if (sections[sectionKey]) {
+            console.log(`✅ Rendering ${sectionKey}:`, sections[sectionKey]);
+            renderSection(sectionKey, sections[sectionKey].data, sections[sectionKey].history);
+          } else {
+            console.log(`❌ Missing ${sectionKey} data`);
+            // 빈 데이터로 렌더링
+            renderSection(sectionKey, null, []);
           }
         });
 
