@@ -26,7 +26,7 @@ async function fetchWithProxies(targetUrl, symbol) {
   for (const proxyUrl of proxies) {
     try {
       console.log(`Trying proxy for ${symbol}: ${proxyUrl.split('?')[0]}`);
-      const res = await fetch(proxyUrl, { timeout: 15000 });
+      const res = await fetch(proxyUrl, { timeout: 20000 });
       
       if (!res.ok) {
         console.log(`Proxy failed with status ${res.status}`);
@@ -90,20 +90,48 @@ async function fetchYahooIndex(symbol) {
 // 히스토리 데이터 가져오기
 async function fetchHistory(symbol, isJPY = false) {
   try {
+    console.log(`Fetching history for ${symbol}...`);
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=7d`;
     const parsed = await fetchWithProxies(targetUrl, symbol);
     
+    if (!parsed || !parsed.chart || !parsed.chart.result || !parsed.chart.result[0]) {
+      console.error(`Invalid response structure for ${symbol} history`);
+      return [];
+    }
+    
     const result = parsed.chart.result[0];
+    
+    if (!result.timestamp || !result.indicators || !result.indicators.quote || !result.indicators.quote[0] || !result.indicators.quote[0].close) {
+      console.error(`Missing data fields for ${symbol} history`);
+      return [];
+    }
+    
     const timestamps = result.timestamp;
     const closes = result.indicators.quote[0].close;
     
+    // null 값 필터링
+    const validData = [];
+    for (let i = 0; i < timestamps.length && i < closes.length; i++) {
+      if (timestamps[i] && closes[i] !== null && closes[i] !== undefined) {
+        validData.push({
+          timestamp: timestamps[i],
+          close: closes[i]
+        });
+      }
+    }
+    
+    if (validData.length < 2) {
+      console.error(`Insufficient valid data for ${symbol} history: ${validData.length} points`);
+      return [];
+    }
+    
     const historyDays = [];
-    for (let i = Math.max(0, closes.length - 5); i < closes.length - 1; i++) {
-      const date = new Date(timestamps[i] * 1000);
+    for (let i = Math.max(0, validData.length - 5); i < validData.length - 1; i++) {
+      const date = new Date(validData[i].timestamp * 1000);
       const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
       
-      let value = closes[i];
-      let prevValue = i > 0 ? closes[i-1] : closes[i];
+      let value = validData[i].close;
+      let prevValue = i > 0 ? validData[i-1].close : validData[i].close;
       
       if (isJPY) {
         value = value * 100;
@@ -122,9 +150,10 @@ async function fetchHistory(symbol, isJPY = false) {
       });
     }
     
+    console.log(`✅ History for ${symbol}: ${historyDays.length} days`);
     return historyDays;
   } catch (e) {
-    console.error(`Error fetching history for ${symbol}:`, e);
+    console.error(`❌ Error fetching history for ${symbol}:`, e.message);
     return [];
   }
 }
@@ -144,15 +173,18 @@ async function collectAllData() {
       fetchYahooIndex(YAHOO_SYMBOLS.jpykrw)
     ]);
     
-    // 히스토리 데이터도 병렬로 가져오기
-    const historyResults = await Promise.allSettled([
+    // 히스토리 데이터도 병렬로 가져오기 (더 긴 타임아웃)
+    console.log('Starting history data collection...');
+    const historyPromises = [
       fetchHistory(YAHOO_SYMBOLS.kospi),
       fetchHistory(YAHOO_SYMBOLS.kosdaq),
       fetchHistory(YAHOO_SYMBOLS.sp500),
       fetchHistory(YAHOO_SYMBOLS.nasdaq100),
       fetchHistory(YAHOO_SYMBOLS.usdkrw),
       fetchHistory(YAHOO_SYMBOLS.jpykrw, true) // JPY는 특별 처리
-    ]);
+    ];
+    
+    const historyResults = await Promise.allSettled(historyPromises);
     
     const symbols = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
     const data = {};
