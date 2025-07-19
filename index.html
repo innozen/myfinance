@@ -567,8 +567,8 @@
   <script>
     const ALPHA_VANTAGE_KEY = '600ER7S7AEIFP1IX';
 
-    // 로컬 개발용 - 직접 Yahoo Finance API 호출
-    const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // 항상 프론트엔드에서 직접 처리 (안정성 극대화)
+    const USE_FRONTEND_FETCH = true; // 백엔드 대신 프론트엔드 사용
     
     // 백엔드 API 엔드포인트 (Netlify Functions)
     const API_ENDPOINT = '/.netlify/functions/stocks';
@@ -583,85 +583,116 @@
       'jpykrw': 'JPYKRW=X'  // 엔/원 환율
     };
 
-    // Yahoo Finance에서 직접 데이터 가져오기 (로컬 개발용)
+    // Yahoo Finance에서 직접 데이터 가져오기 (안정성 극대화)
     async function fetchYahooData(symbol) {
       const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
       
-      // 여러 프록시 옵션 시도
+      // 여러 프록시 옵션 시도 (순서대로)
       const proxies = [
         `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
+        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+        `https://cors-anywhere.herokuapp.com/${targetUrl}`
       ];
       
-      for (const proxyUrl of proxies) {
-        try {
-          const response = await fetch(proxyUrl);
-          
-          if (!response.ok) {
-            continue;
-          }
-          
-          let parsed;
-          if (proxyUrl.includes('allorigins.win')) {
-            const data = await response.json();
-            parsed = JSON.parse(data.contents);
-          } else {
-            parsed = await response.json();
-          }
-          
-          const result = parsed.chart.result[0];
-          const close = result.indicators.quote[0].close;
-          const timestamps = result.timestamp;
-          
-          // 최근 2일 데이터로 현재값과 변화 계산
-          let prev = close[close.length - 2];
-          let curr = close[close.length - 1];
-          
-          // JPY/KRW의 경우 100을 곱해서 100엔 기준으로 변환
-          if (symbol === 'JPYKRW=X') {
-            prev = prev * 100;
-            curr = curr * 100;
-          }
-          
-          const change = curr - prev;
-          const percent = (change / prev) * 100;
-          
-          // 히스토리 데이터 생성 (최근 4일)
-          const history = [];
-          for (let i = Math.max(0, close.length - 4); i < close.length; i++) {
-            const date = new Date(timestamps[i] * 1000);
-            let value = close[i];
+      // 최대 3번 재시도
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        for (const proxyUrl of proxies) {
+          try {
+            console.log(`Trying ${symbol} via ${proxyUrl.split('?')[0]} (attempt ${attempt})`);
+            const response = await fetch(proxyUrl, { timeout: 15000 });
             
-            if (symbol === 'JPYKRW=X') {
-              value = value * 100;
+            if (!response.ok) {
+              console.log(`Proxy failed: ${response.status}`);
+              continue;
             }
             
-            const prevValue = i > 0 ? close[i-1] : close[i];
-            const dayChange = value - (symbol === 'JPYKRW=X' ? prevValue * 100 : prevValue);
+            let parsed;
+            if (proxyUrl.includes('allorigins.win')) {
+              const data = await response.json();
+              parsed = JSON.parse(data.contents);
+            } else {
+              parsed = await response.json();
+            }
             
-            history.push({
-              date: `${date.getMonth() + 1}/${date.getDate()}`,
-              value: value.toLocaleString(undefined, {maximumFractionDigits: 2}),
-              change: dayChange.toFixed(2),
-              isUp: dayChange >= 0
-            });
+            const result = parsed.chart.result[0];
+            const close = result.indicators.quote[0].close;
+            const timestamps = result.timestamp;
+            
+            // null 값 필터링
+            const validData = [];
+            for (let i = 0; i < timestamps.length && i < close.length; i++) {
+              if (timestamps[i] && close[i] !== null && close[i] !== undefined) {
+                validData.push({
+                  timestamp: timestamps[i],
+                  close: close[i]
+                });
+              }
+            }
+            
+            if (validData.length < 2) {
+              console.log(`Insufficient data for ${symbol}: ${validData.length} points`);
+              continue;
+            }
+            
+            // 최근 2일 데이터로 현재값과 변화 계산
+            let prev = validData[validData.length - 2].close;
+            let curr = validData[validData.length - 1].close;
+            
+            // JPY/KRW의 경우 100을 곱해서 100엔 기준으로 변환
+            if (symbol === 'JPYKRW=X') {
+              prev = prev * 100;
+              curr = curr * 100;
+            }
+            
+            const change = curr - prev;
+            const percent = (change / prev) * 100;
+            
+            // 히스토리 데이터 생성 (최근 4일)
+            const history = [];
+            for (let i = Math.max(0, validData.length - 4); i < validData.length; i++) {
+              const date = new Date(validData[i].timestamp * 1000);
+              let value = validData[i].close;
+              
+              if (symbol === 'JPYKRW=X') {
+                value = value * 100;
+              }
+              
+              const prevValue = i > 0 ? validData[i-1].close : validData[i].close;
+              const dayChange = value - (symbol === 'JPYKRW=X' ? prevValue * 100 : prevValue);
+              
+              history.push({
+                date: `${date.getMonth() + 1}/${date.getDate()}`,
+                value: value.toLocaleString(undefined, {maximumFractionDigits: 2}),
+                change: dayChange.toFixed(2),
+                isUp: dayChange >= 0
+              });
+            }
+            
+            console.log(`✅ Success for ${symbol}: ${curr.toLocaleString()}`);
+            return {
+              main: {
+                symbol,
+                value: curr.toLocaleString(undefined, {maximumFractionDigits: 2}),
+                change: `${change >= 0 ? '+' : ''}${change.toFixed(2)}`,
+                percent: `${change >= 0 ? '+' : ''}${percent.toFixed(2)}%`,
+                up: change >= 0
+              },
+              history: history
+            };
+          } catch (error) {
+            console.log(`Error with ${proxyUrl.split('?')[0]}: ${error.message}`);
+            continue;
           }
-          
-          return {
-            main: {
-              symbol,
-              value: curr.toLocaleString(undefined, {maximumFractionDigits: 2}),
-              change: `${change >= 0 ? '+' : ''}${change.toFixed(2)}`,
-              percent: `${change >= 0 ? '+' : ''}${percent.toFixed(2)}%`,
-              up: change >= 0
-            },
-            history: history
-          };
-        } catch (error) {
-          continue;
+        }
+        
+        // 재시도 전 대기
+        if (attempt < 3) {
+          console.log(`All proxies failed for ${symbol}, retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
+      console.log(`❌ All attempts failed for ${symbol}`);
       return null;
     }
 
@@ -700,7 +731,7 @@
 
     // 백엔드 API에서 모든 데이터 가져오기
     async function fetchAllStockData(forceRefresh = false) {
-      if (IS_LOCAL) {
+      if (USE_FRONTEND_FETCH) {
         return await fetchAllStockDataLocal();
       }
       
