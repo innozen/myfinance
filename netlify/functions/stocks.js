@@ -68,7 +68,12 @@ async function fetchWithProxies(targetUrl, symbol) {
 async function fetchYahooIndex(symbol) {
   try {
     console.log(`🔄 Starting fetch for ${symbol}`);
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+    
+    // 환율 데이터의 경우 다른 파라미터 사용
+    const isCurrency = symbol.includes('KRW') || symbol.includes('JPY') || symbol.includes('USD');
+    const range = isCurrency ? '5d' : '2d'; // 환율은 더 긴 기간으로
+    
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}`;
     const parsed = await fetchWithProxies(targetUrl, symbol);
     
     if (!parsed || !parsed.chart || !parsed.chart.result || !parsed.chart.result[0]) {
@@ -87,8 +92,14 @@ async function fetchYahooIndex(symbol) {
       throw new Error(`Insufficient price data for ${symbol}: ${close ? close.length : 0} points`);
     }
     
-    let prev = close[close.length - 2];
-    let curr = close[close.length - 1];
+    // 환율 데이터의 경우 null 값 필터링
+    const validCloses = close.filter(val => val !== null && val !== undefined);
+    if (validCloses.length < 2) {
+      throw new Error(`Insufficient valid price data for ${symbol}: ${validCloses.length} points`);
+    }
+    
+    let prev = validCloses[validCloses.length - 2];
+    let curr = validCloses[validCloses.length - 1];
     
     if (prev === null || prev === undefined || curr === null || curr === undefined) {
       throw new Error(`Invalid price values for ${symbol}: prev=${prev}, curr=${curr}`);
