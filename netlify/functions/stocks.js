@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 // 메모리 캐시 (서버리스 환경에서는 제한적)
 let dataCache = null;
 let lastUpdate = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5분
+const CACHE_DURATION = 2 * 60 * 1000; // 2분으로 단축
 
 // Yahoo Finance 심볼 매핑
 const YAHOO_SYMBOLS = {
@@ -258,9 +258,11 @@ exports.handler = async (event, context) => {
       };
     }
     
-    // 캐시 확인
+    // 캐시 확인 (강제 새로고침 옵션 추가)
+    const forceRefresh = event.queryStringParameters && event.queryStringParameters.refresh === 'true';
     const now = Date.now();
-    if (dataCache && lastUpdate && (now - lastUpdate) < CACHE_DURATION) {
+    
+    if (!forceRefresh && dataCache && lastUpdate && (now - lastUpdate) < CACHE_DURATION) {
       console.log('Returning cached data');
       return {
         statusCode: 200,
