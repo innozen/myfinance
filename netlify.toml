@@ -3,11 +3,17 @@
   publish = "."
 
 [functions]
-  # 함수 실행 시간 연장 (데이터 수집을 위해)
   timeout = 30
 
 [[headers]]
   for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+
+[[headers]]
+  for = "/.netlify/functions/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Headers = "Content-Type"
