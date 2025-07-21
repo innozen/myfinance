@@ -550,6 +550,12 @@
         <div class="item-change" id="nasdaq100-change"><div class="skeleton change"></div></div>
         <div class="item-history" id="nasdaq100-history"></div>
       </div>
+      <div class="item" id="vix">
+        <div class="item-title">VIX 지수</div>
+        <div class="item-value" id="vix-value"><div class="skeleton value"></div></div>
+        <div class="item-change" id="vix-change"><div class="skeleton change"></div></div>
+        <div class="item-history" id="vix-history"></div>
+      </div>
       <div class="item" id="usdkrw">
         <div class="item-title">달러 환율 (USD/KRW)</div>
         <div class="item-value" id="usdkrw-value"><div class="skeleton value"></div></div>
@@ -579,6 +585,7 @@
       'kosdaq': '^KQ11', // 코스닥
       'sp500': '^GSPC', // S&P 500
       'nasdaq100': '^NDX', // 나스닥 100
+      'vix': '^VIX', // VIX 지수
       'usdkrw': 'USDKRW=X', // 달러/원 환율
       'jpykrw': 'JPYKRW=X'  // 엔/원 환율
     };
@@ -703,6 +710,7 @@
           { key: 'kosdaq', symbol: YAHOO_SYMBOLS.kosdaq, name: 'KOSDAQ' },
           { key: 'sp500', symbol: YAHOO_SYMBOLS.sp500, name: 'S&P 500' },
           { key: 'nasdaq100', symbol: YAHOO_SYMBOLS.nasdaq100, name: 'NASDAQ 100' },
+          { key: 'vix', symbol: YAHOO_SYMBOLS.vix, name: 'VIX' },
           { key: 'usdkrw', symbol: YAHOO_SYMBOLS.usdkrw, name: 'USD/KRW' },
           { key: 'jpykrw', symbol: YAHOO_SYMBOLS.jpykrw, name: 'JPY/KRW' }
         ];
@@ -990,7 +998,7 @@
           console.log('Available sections:', Object.keys(sections));
           
           // 모든 예상 섹션 확인
-          const expectedSections = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'usdkrw', 'jpykrw'];
+          const expectedSections = ['kospi', 'kosdaq', 'sp500', 'nasdaq100', 'vix', 'usdkrw', 'jpykrw'];
           expectedSections.forEach(sectionKey => {
             if (sections[sectionKey]) {
               console.log(`✅ Rendering ${sectionKey}:`, sections[sectionKey]);
