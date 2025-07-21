@@ -647,18 +647,19 @@
             const change = curr - prev;
             const percent = (change / prev) * 100;
             
-            // 히스토리 데이터 생성 (오늘 제외, 최근 4일)
+            // 히스토리 데이터 생성 (오늘 제외, 최근 4일, 등락 정상 표시)
             const history = [];
-            for (let i = Math.max(0, validData.length - 5); i < validData.length - 1; i++) {
+            for (let i = Math.max(1, validData.length - 5); i < validData.length - 1; i++) {
               const date = new Date(validData[i].timestamp * 1000);
               let value = validData[i].close;
+              let prevValue = validData[i-1].close;
               
               if (symbol === 'JPYKRW=X') {
                 value = value * 100;
+                prevValue = prevValue * 100;
               }
               
-              const prevValue = i > 0 ? validData[i-1].close : validData[i].close;
-              const dayChange = value - (symbol === 'JPYKRW=X' ? prevValue * 100 : prevValue);
+              const dayChange = value - prevValue;
               
               history.push({
                 date: `${date.getMonth() + 1}/${date.getDate()}`,
