@@ -592,7 +592,7 @@
 
     // Yahoo Finance에서 직접 데이터 가져오기 (안정성 극대화)
     async function fetchYahooData(symbol) {
-      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6d`;
       
       // 여러 프록시 옵션 시도 (순서대로)
       const proxies = [
@@ -625,6 +625,12 @@
             const close = result.indicators.quote[0].close;
             const timestamps = result.timestamp;
             
+            // 원본 데이터 로깅
+            console.log(`[${symbol}] Raw Data:`, {
+              timestamps: timestamps.map(t => new Date(t * 1000).toLocaleDateString()),
+              closes: close
+            });
+            
             // null 값 필터링
             const validData = [];
             for (let i = 0; i < timestamps.length && i < close.length; i++) {
@@ -635,6 +641,14 @@
                 });
               }
             }
+            
+            // 유효 데이터 로깅
+            console.log(`[${symbol}] Valid Data (${validData.length} items):`, 
+              validData.map(d => ({
+                date: new Date(d.timestamp * 1000).toLocaleDateString(),
+                close: d.close
+              }))
+            );
             
             if (validData.length < 2) {
               console.log(`Insufficient data for ${symbol}: ${validData.length} points`);
@@ -654,16 +668,42 @@
             const change = curr - prev;
             const percent = (change / prev) * 100;
             
-            // 히스토리 데이터 생성 (오늘 제외, 최근 4개, 카드 4개 고정)
+            // 히스토리 데이터 생성 (오늘 제외, 최대 5개)
             const history = [];
-            for (let i = Math.max(1, validData.length - 4); i < validData.length; i++) {
+            const historyEnd = validData.length - 1; // 오늘 인덱스
+            const historyStart = Math.max(0, historyEnd - 5); // 0부터 시작 가능
+            
+            // 히스토리 생성 로깅
+            console.log(`[${symbol}] History Calculation:`, {
+              validDataLength: validData.length,
+              historyEnd,
+              historyStart,
+              range: `${historyStart} to ${historyEnd-1}`,
+              firstDataPrevClose: validData[0].close,
+              firstDataClose: validData[1].close
+            });
+            
+            for (let i = historyStart; i < historyEnd; i++) {
               const date = new Date(validData[i].timestamp * 1000);
               let value = validData[i].close;
-              let prevValue = validData[i-1].close;
+              let prevValue = validData[i].close;
+              
+              // 이전 종가와 비교
+              if (i === 0 && validData.length > 1) {
+                // 첫 데이터는 다음 날 데이터와 비교
+                value = validData[1].close;
+                prevValue = validData[0].close;
+              } else if (i > 0) {
+                // 나머지는 이전 날 데이터와 비교
+                value = validData[i].close;
+                prevValue = validData[i-1].close;
+              }
+              
               if (symbol === 'JPYKRW=X') {
                 value = value * 100;
                 prevValue = prevValue * 100;
               }
+              
               const dayChange = value - prevValue;
               history.push({
                 date: `${date.getMonth() + 1}/${date.getDate()}`,
@@ -672,6 +712,9 @@
                 isUp: dayChange >= 0
               });
             }
+            
+            // 최종 히스토리 로깅
+            console.log(`[${symbol}] Final History (${history.length} items):`, history);
             
             console.log(`✅ Success for ${symbol}: ${curr.toLocaleString()}`);
             return {
@@ -802,8 +845,12 @@
 
     function renderHistoryCards(historyData) {
       if (!historyData || historyData.length === 0) return '';
-      
-      const historyHtml = historyData.map((day, index) => {
+      const cards = [];
+      // 최대 5개까지 표시
+      const maxCards = 5;
+      const dataCount = Math.min(historyData.length, maxCards);
+      for (let i = 0; i < dataCount; i++) {
+        const day = historyData[i];
         let arrow = '';
         let arrowClass = '';
         let cardClass = '';
@@ -819,19 +866,16 @@
           arrow = '─';
           arrowClass = 'arrow-flat';
         }
-        
-        // 모든 카드의 폰트 크기를 동일하게 유지
-        return `<div class="history-card ${cardClass}" style="animation-delay: ${0.1 + index * 0.1}s">
+        cards.push(`<div class="history-card ${cardClass}" style="animation-delay: ${0.1 + i * 0.1}s">
           <div class="history-date">${day.date}</div>
           <div class="history-value">${day.value}</div>
           <div class="history-change ${day.isUp ? 'up' : 'down'}">
             <span class="${arrowClass}">${arrow}</span>
             <span>${day.isUp ? '+' : ''}${day.change}</span>
           </div>
-        </div>`;
-      }).join('');
-      
-      return `<div style="font-size: 0.9em; margin-bottom: 4px; color: #888;">최근 4일</div><div class="history-cards">${historyHtml}</div>`;
+        </div>`);
+      }
+      return `<div style="font-size: 0.9em; margin-bottom: 4px; color: #888;">최근 5일</div><div class="history-cards">${cards.join('')}</div>`;
     }
 
     // 각 섹션을 독립적으로 렌더링하는 함수들
