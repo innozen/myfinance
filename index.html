@@ -647,20 +647,17 @@
             const change = curr - prev;
             const percent = (change / prev) * 100;
             
-            // 히스토리 데이터 생성 (오늘 제외, 최근 4일, 등락 정상 표시)
+            // 히스토리 데이터 생성 (오늘 제외, 최근 4일, 첫번째 카드도 등락/화살표 정상)
             const history = [];
-            for (let i = Math.max(1, validData.length - 5); i < validData.length - 1; i++) {
+            for (let i = Math.max(0, validData.length - 5); i < validData.length - 1; i++) {
               const date = new Date(validData[i].timestamp * 1000);
               let value = validData[i].close;
-              let prevValue = validData[i-1].close;
-              
+              let prevValue = i > 0 ? validData[i-1].close : validData[i].close;
               if (symbol === 'JPYKRW=X') {
                 value = value * 100;
-                prevValue = prevValue * 100;
+                prevValue = i > 0 ? validData[i-1].close * 100 : value;
               }
-              
               const dayChange = value - prevValue;
-              
               history.push({
                 date: `${date.getMonth() + 1}/${date.getDate()}`,
                 value: value.toLocaleString(undefined, {maximumFractionDigits: 2}),
