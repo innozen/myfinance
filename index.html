@@ -647,9 +647,9 @@
             const change = curr - prev;
             const percent = (change / prev) * 100;
             
-            // 히스토리 데이터 생성 (최근 4일)
+            // 히스토리 데이터 생성 (오늘 제외, 최근 4일)
             const history = [];
-            for (let i = Math.max(0, validData.length - 4); i < validData.length; i++) {
+            for (let i = Math.max(0, validData.length - 5); i < validData.length - 1; i++) {
               const date = new Date(validData[i].timestamp * 1000);
               let value = validData[i].close;
               
