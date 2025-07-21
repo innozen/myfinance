@@ -668,10 +668,10 @@
             const change = curr - prev;
             const percent = (change / prev) * 100;
             
-            // 히스토리 데이터 생성 (오늘 제외, 최대 5개)
+            // 히스토리 데이터 생성 (오늘 제외, 최대 4개)
             const history = [];
             const historyEnd = validData.length - 1; // 오늘 인덱스
-            const historyStart = Math.max(0, historyEnd - 5); // 0부터 시작 가능
+            const historyStart = Math.max(0, historyEnd - 4); // 0부터 시작 가능, 최대 4개
             
             // 히스토리 생성 로깅
             console.log(`[${symbol}] History Calculation:`, {
@@ -846,8 +846,8 @@
     function renderHistoryCards(historyData) {
       if (!historyData || historyData.length === 0) return '';
       const cards = [];
-      // 최대 5개까지 표시
-      const maxCards = 5;
+      // 최대 4개까지 표시
+      const maxCards = 4;
       const dataCount = Math.min(historyData.length, maxCards);
       for (let i = 0; i < dataCount; i++) {
         const day = historyData[i];
@@ -875,7 +875,7 @@
           </div>
         </div>`);
       }
-      return `<div style="font-size: 0.9em; margin-bottom: 4px; color: #888;">최근 5일</div><div class="history-cards">${cards.join('')}</div>`;
+      return `<div style="font-size: 0.9em; margin-bottom: 4px; color: #888;">최근 4일</div><div class="history-cards">${cards.join('')}</div>`;
     }
 
     // 각 섹션을 독립적으로 렌더링하는 함수들
